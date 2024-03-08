@@ -1,0 +1,5 @@
+Setting up Virtual environment
+------------------------------
+- We need to set up a virtual environment before starting the project and this is good practice because it isolates your projects and its dependencies from the rest of your computer.
+- Also gives control over project settings and allows you to use pip install
+- We use the command: python -m venv [env name]
