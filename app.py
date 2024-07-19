@@ -45,18 +45,21 @@ def get_vectorstore(text_chunks):
 
 # REALLY UNDERSTAND WHAT THIS FUNCTION DOES - IT IS THE CORE OF THE AI FUNCTIONALITY
 def get_conversation_chain(vectorstore):
-    llm = ChatOpenAI()
+    llm = ChatOpenAI(model="gpt-4", temperature=0.75)
     memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True) # figure out how memory works in langchain (! this is important, this is what gets the response from the LLM)
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm = llm,
         retriever=vectorstore.as_retriever(), #! this is the line of code that inserts the embedding that was made from the text that is stored in the FAISS vector database as context when the LLM responds to user questions
-        memory=memory
+        memory=memory,
+        
     )
+
     return conversation_chain
 
 # Triggered when the user clicks submit
 def handle_userinput(user_question):
-    response = st.session_state.conversation({'question':user_question})
+
+    response = st.session_state.conversation({'question':user_question}) #this adds the user's question (and prompt) in the session state which then triggers the get_conversation_chain function to pass to LLM??
     st.session_state.chat_history = response['chat_history'] #chat_history is the memmory key (!Figure out what the means in addition to above funciton)
 
     # The response['chat_history'] pulls up a json object with index 0, 2 etc are what the user typed in (the questions they asked)
@@ -81,11 +84,11 @@ def main():
         st.session_state.conversation = None
 
     st.write(css, unsafe_allow_html=True) #loads the css file so that when we load in the html templates for the design of the user and bot text boxes the css is applied(user_template and bot_template respectively - check import statement)
-    st.header("Chat with multiple PDFs :books:")
+    st.header("Pathfinder :books:")
     
-    user_input = st.text_input("Ask a question about your documents:")
+    user_input = st.text_input("Ask a question about your courses:")
     if user_input:
-        handle_userinput(user_input)
+        handle_userinput( user_input)
 
 
     with st.sidebar:
