@@ -11,6 +11,7 @@ ragas==0.1.10
 datasets==2.20.0
 pandas==2.2.1
 langchain-community==0.0.25
+langchain_openai==0.1.7
 # uncomment to use huggingface llms
 # huggingface-hub==0.14.1
 

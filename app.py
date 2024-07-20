@@ -4,7 +4,8 @@ from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
 
 # from langchain.chat_models import ChatOpenAI
-from langchain_community.chat_models import ChatOpenAI
+# from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 
 # from langchain.embeddings import OpenAIEmbeddings
 from langchain_community.embeddings import OpenAIEmbeddings
@@ -13,6 +14,12 @@ from langchain_community.vectorstores import FAISS
 
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
+
+from langchain.chains import create_history_aware_retriever
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import MessagesPlaceholder
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
 
 from htmlTemplate import css, bot_template, user_template
 
@@ -55,20 +62,60 @@ def get_vectorstore(text_chunks):
     vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings) #get the text chunks, convert to embedding based on embedding confid (above line i.e. OpenAI Ada service)
     return vectorstore
 
+
 # REALLY UNDERSTAND WHAT THIS FUNCTION DOES - IT IS THE CORE OF THE AI FUNCTIONALITY
 def get_conversation_chain(vectorstore):
     llm = ChatOpenAI(model="gpt-4", temperature=0.75)
+    retriever = vectorstore.as_retriever()
+
+    print(retriever.get_relevant_documents("Who is working on the project"))
+    
     memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True) # figure out how memory works in langchain (! this is important, this is what gets the response from the LLM)
+
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm = llm,
-        retriever=vectorstore.as_retriever(), #! this is the line of code that inserts the embedding that was made from the text that is stored in the FAISS vector database as context when the LLM responds to user questions
+        retriever= retriever, #! this is the line of code that inserts the embedding that was made from the text that is stored in the FAISS vector database as context when the LLM responds to user questions
         memory=memory,
-        
     )
 
-    print("=======Type Below=========")
-    print(type(conversation_chain))
+
+    # print("=======Type Below=========")
+    # print(conversation_chain.return_source_documents)
     return conversation_chain
+
+def get_conversation_chain_updated(vectorstore):
+    llm = ChatOpenAI(model="gpt-4", temperature=0.75)
+    retriever = vectorstore.as_retriever()
+
+    prompt_search_query = ChatPromptTemplate.from_messages([
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("user","{input}"),
+    ("user","Given the above conversation, generate a search query to look up to get information relevant to the conversation")
+    ])
+
+    retriever_chain = create_history_aware_retriever(llm, retriever, prompt_search_query)
+
+    prompt_get_answer = ChatPromptTemplate.from_messages(
+        [
+            ("system", "Answer the user's questions based on the below context:\\n\\n{context}"), 
+            MessagesPlaceholder(variable_name="chat_history"), 
+            ("user","{input}")
+        ]
+    
+    )
+
+    document_chain=create_stuff_documents_chain(llm, prompt_get_answer)
+
+    retrieval_chain = create_retrieval_chain(retriever_chain, document_chain)
+
+    chat_history = st.session_state.chat_history
+
+    response = retrieval_chain.invoke({
+        "chat_history":chat_history,
+        "input":"Who is working on this project?"
+    })
+    print(response["answer"])
+
 
 # Triggered when the user clicks submit
 def handle_userinput(user_question):
@@ -76,7 +123,12 @@ def handle_userinput(user_question):
     response = st.session_state.conversation({'question':user_question}) #this adds the user's question (and prompt) in the session state which then triggers the get_conversation_chain function to pass to LLM??
     st.session_state.chat_history = response['chat_history'] #chat_history is the memmory key (!Figure out what the means in addition to above funciton)
 
-    print("+++++" + user_question + "+++++")
+    print("+++++ " + user_question + " +++++")
+
+    print("+++++ " + response["answer"] + " +++++")
+
+    print("\nResult\n")
+    # print(response)
 
     # The response['chat_history'] pulls up a json object with index 0, 2 etc are what the user typed in (the questions they asked)
     # the index of 1, 3, 5 are the responses the the LLM had replied with
@@ -85,8 +137,6 @@ def handle_userinput(user_question):
             st.write(user_template.replace("{{MSG}}", message.content), unsafe_allow_html=True) #we are simply replacing the {{MSG}} part of the string in the HTML templates (check the HTMLtemplate file for more info)
         else:
             st.write(bot_template.replace("{{MSG}}", message.content), unsafe_allow_html=True)
-
-    print("+++++ " + st.session_state.chat_history[-1].content + " +++++")
 
 
 def main():
@@ -130,6 +180,9 @@ def main():
 
                 #create conversion chain
                 st.session_state.conversation = get_conversation_chain(vectorstore) #?Understand how session_state and persistent state mangement works in streamlit
+                st.session_state.conversation = get_conversation_chain_updated(vectorstore)
+
+        
         if st.button("RAGAS Test"):
             print("hello")
 
