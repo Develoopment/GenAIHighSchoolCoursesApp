@@ -3,15 +3,27 @@ from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
 
-from langchain.chat_models import ChatOpenAI
+# from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
+# from langchain.embeddings import OpenAIEmbeddings
+from langchain_community.embeddings import OpenAIEmbeddings
+# from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 
 from htmlTemplate import css, bot_template, user_template
+
+# for RAGAS Evaluation
+from ragas.metrics import (
+    answer_correctness,
+    faithfulness,
+)
+
+from datasets import Dataset
+
 
 #this function uses PdfReaader from the PyPDF2 library to read the text from each pdf
 #Note that this app can use multiple PDFs at the same time so we need a for loop
@@ -54,6 +66,8 @@ def get_conversation_chain(vectorstore):
         
     )
 
+    print("=======Type Below=========")
+    print(type(conversation_chain))
     return conversation_chain
 
 # Triggered when the user clicks submit
@@ -62,6 +76,8 @@ def handle_userinput(user_question):
     response = st.session_state.conversation({'question':user_question}) #this adds the user's question (and prompt) in the session state which then triggers the get_conversation_chain function to pass to LLM??
     st.session_state.chat_history = response['chat_history'] #chat_history is the memmory key (!Figure out what the means in addition to above funciton)
 
+    print("+++++" + user_question + "+++++")
+
     # The response['chat_history'] pulls up a json object with index 0, 2 etc are what the user typed in (the questions they asked)
     # the index of 1, 3, 5 are the responses the the LLM had replied with
     for i, message in enumerate(st.session_state.chat_history):
@@ -69,6 +85,8 @@ def handle_userinput(user_question):
             st.write(user_template.replace("{{MSG}}", message.content), unsafe_allow_html=True) #we are simply replacing the {{MSG}} part of the string in the HTML templates (check the HTMLtemplate file for more info)
         else:
             st.write(bot_template.replace("{{MSG}}", message.content), unsafe_allow_html=True)
+
+    print("+++++ " + st.session_state.chat_history[-1].content + " +++++")
 
 
 def main():
@@ -99,17 +117,21 @@ def main():
             with st.spinner("Processing"): #this tells the user graphically that there is a process running (with the spinning wheel)
                 #get PDF text
                 raw_text = get_pdf_text(pdf_docs)
+                print("====================Pdf is being converted to text====================")
                 #print(raw_text)
 
                 #Make text chunks
                 text_chunks = get_text_chunks(raw_text)
+                print("====================Pdf is being split====================")
 
                 #create vector store
                 vectorstore = get_vectorstore(text_chunks)
+                print("====================PDf has been vectorized and now is stored in FAISS Vectorstore====================")
 
                 #create conversion chain
                 st.session_state.conversation = get_conversation_chain(vectorstore) #?Understand how session_state and persistent state mangement works in streamlit
-    
+        if st.button("RAGAS Test"):
+            print("hello")
 
 if __name__ == "__main__":
     main()
